@@ -221,7 +221,7 @@
 
   <footer>
     Data: <a id="srcLink" href="https://spotter.sofarocean.com/public/SPOT-32429C" target="_blank" rel="noopener">Sofar Ocean public Spotter page</a>.
-    Shows the newest report from the buoy: processed hourly reports (same as the Sofar dashboard) or, when those lag behind, the raw 30-minute reports. Wave height converted from meters to feet; wind from m/s to mph.
+    Shows the newest report from the buoy, processed hourly (same as the Sofar dashboard) or raw every 30 minutes, whichever is newer; the charts plot both. Wave height converted from meters to feet; wind from m/s to mph.
     Directions are the direction waves and wind come <em>from</em>.
     Auto-refreshes every <span id="intervalLabel"></span> while this page is open.
   </footer>
@@ -390,8 +390,11 @@
     // direction arrows: one per report, pointing where the waves/wind are heading
     if (c.arrowKey) {
       const cy = m.t + ARROWS / 2;
+      let lastAx = -Infinity;
       for (const p of pts) {
         const d = p[c.arrowKey]; if (d == null) continue;
+        if (X(p.t) - lastAx < 15) continue;   // skip arrows that would overlap the previous one
+        lastAx = X(p.t);
         const g = el('g', { transform: `translate(${X(p.t).toFixed(1)} ${cy}) rotate(${(d + 180) % 360})`, class: 'dir-arrow' });
         g.appendChild(el('path', { d: 'M0,-7 L4,2 L0,0.5 L-4,2 Z' }));
         g.appendChild(el('line', { x1: 0, y1: 0.5, x2: 0, y2: 7 }));
@@ -482,10 +485,8 @@
   }
   function renderCharts(h) {
     const byTime = a => a.map(p => ({ t: new Date(p.timestamp).getTime(), ...p })).sort((a, b) => a.t - b.t);
-    // Processed (hdr) hourly points, plus raw points newer than the last processed one so the line reaches now.
-    const blend = a => { const all = byTime(a); const hdr = all.filter(p => p.processing_source === 'hdr');
-      const lastHdr = hdr.length ? hdr[hdr.length - 1].t : -Infinity;
-      return hdr.concat(all.filter(p => p.processing_source !== 'hdr' && p.t > lastHdr)); };
+    // Every report in the window: processed hourly ones and raw 30-minute ones, in time order.
+    const blend = byTime;
     charts.chHs = {
       points: blend(h.waves || []).map(p => ({ t: p.t, raw: p.processing_source !== 'hdr', hs: p.significantWaveHeight * M_TO_FT, tp: p.peakPeriod, dir: p.peakDirection })),
       lanes: [
