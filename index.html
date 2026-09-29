@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Spotter">
 <title>Spotter Live Readout</title>
 <style>
   :root {
@@ -21,18 +23,9 @@
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f1419;
-      --card: #171d25;
-      --ink: #eef2f6;
-      --ink-2: #b4bcc8;
-      --ink-3: #7b8594;
-      --line: #2a323d;
-      --accent: #5aa2f2;
-      --accent-soft: #1b2a3d;
-      --ok: #4ccb8a;
-      --warn: #e2b04f;
-      --bad: #ef7365;
-      --bad-soft: #3a1f1c;
+      --bg: #0f1419; --card: #171d25; --ink: #eef2f6; --ink-2: #b4bcc8; --ink-3: #7b8594;
+      --line: #2a323d; --accent: #5aa2f2; --accent-soft: #1b2a3d; --ok: #4ccb8a;
+      --warn: #e2b04f; --bad: #ef7365; --bad-soft: #3a1f1c;
     }
   }
   :root[data-theme="dark"] {
@@ -52,30 +45,22 @@
   }
   main { max-width: 900px; margin: 0 auto; }
 
-  header {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px;
-    margin-bottom: 8px;
-  }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 8px; }
   header h1 { font-size: 20px; font-weight: 600; margin: 0; }
   header .sub { color: var(--ink-2); font-size: 14px; }
   header .spacer { flex: 1; }
   button {
-    font: inherit; font-size: 14px;
-    color: var(--accent); background: var(--accent-soft);
+    font: inherit; font-size: 14px; color: var(--accent); background: var(--accent-soft);
     border: 1px solid transparent; border-radius: 8px; padding: 6px 12px; cursor: pointer;
   }
   button:disabled { opacity: .6; cursor: default; }
 
-  .status {
-    display: flex; flex-wrap: wrap; gap: 6px 18px;
-    font-size: 13px; color: var(--ink-3); margin-bottom: 18px;
-  }
+  .status { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-3); margin-bottom: 18px; }
   .status b { font-weight: 500; color: var(--ink-2); }
   .status .stale { color: var(--warn); }
 
   .error {
-    display: none;
-    background: var(--bad-soft); color: var(--bad);
+    display: none; background: var(--bad-soft); color: var(--bad);
     border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 18px;
   }
   .error.show { display: block; }
@@ -94,18 +79,24 @@
   .hero .side .v { font-size: 20px; font-weight: 600; }
   .hero .side .v small { font-size: 12px; font-weight: 500; color: var(--ink-2); }
 
-  .grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;
-  }
-  .tile {
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 14px 16px; min-height: 96px;
-  }
+  h2 { font-size: 13px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 10px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-height: 96px; }
   .tile .k { font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
   .tile .v { font-size: 26px; font-weight: 600; line-height: 1.1; }
   .tile .v small { font-size: 13px; font-weight: 500; color: var(--ink-2); margin-left: 4px; }
   .tile .n { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
   .tile a { color: var(--accent); text-decoration: none; }
+
+  .parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .part { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .part .title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .part .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .part .k { font-size: 12px; color: var(--ink-3); }
+  .part .v { font-size: 20px; font-weight: 600; line-height: 1.2; }
+  .part .v small { font-size: 12px; font-weight: 500; color: var(--ink-2); margin-left: 3px; }
+  .part .n { font-size: 12px; color: var(--ink-3); }
 
   .dir { display: inline-flex; align-items: center; gap: 8px; }
   .arrow {
@@ -116,10 +107,7 @@
 
   footer { font-size: 12px; color: var(--ink-3); margin-top: 24px; }
   footer a { color: var(--accent); }
-
   .skel { color: var(--ink-3); }
-  .rows { display: none; }
-  .rows.show { display: block; }
 </style>
 </head>
 <body>
@@ -178,11 +166,6 @@
       <div class="n" id="bpNote">—</div>
     </div>
     <div class="tile">
-      <div class="k">Sea surface temperature</div>
-      <div class="v"><span id="sst">—</span><small id="sstUnit">°F</small></div>
-      <div class="n" id="sstNote">—</div>
-    </div>
-    <div class="tile">
       <div class="k">Position</div>
       <div class="v" style="font-size:18px"><a id="pos" href="#" target="_blank" rel="noopener">—</a></div>
       <div class="n" id="posNote">—</div>
@@ -194,9 +177,30 @@
     </div>
   </section>
 
+  <h2>Swell and sea</h2>
+  <section class="parts">
+    <div class="part">
+      <div class="title">Swell</div>
+      <div class="row">
+        <div><div class="k">Height</div><div class="v"><span id="swHs">—</span><small>ft</small></div></div>
+        <div><div class="k">Mean period</div><div class="v"><span id="swTm">—</span><small>s</small></div></div>
+        <div><div class="k">Direction</div><div class="v"><span id="swDir">—</span></div><div class="n" id="swDirNote"></div></div>
+      </div>
+    </div>
+    <div class="part">
+      <div class="title">Sea (wind waves)</div>
+      <div class="row">
+        <div><div class="k">Height</div><div class="v"><span id="seHs">—</span><small>ft</small></div></div>
+        <div><div class="k">Mean period</div><div class="v"><span id="seTm">—</span><small>s</small></div></div>
+        <div><div class="k">Direction</div><div class="v"><span id="seDir">—</span></div><div class="n" id="seDirNote"></div></div>
+      </div>
+    </div>
+  </section>
+
   <footer>
     Data: <a id="srcLink" href="https://spotter.sofarocean.com/public/SPOT-32429C" target="_blank" rel="noopener">Sofar Ocean public Spotter page</a>.
-    Wave height converted from meters to feet; wind from m/s to mph. Directions are the direction waves and wind come <em>from</em>.
+    Uses the same processed (HDR) hourly data as the Sofar dashboard. Wave height converted from meters to feet; wind from m/s to mph.
+    Directions are the direction waves and wind come <em>from</em>.
     Auto-refreshes every <span id="intervalLabel"></span> while this page is open.
   </footer>
 </main>
@@ -205,7 +209,7 @@
 (() => {
   // ---------- settings ----------
   const SPOTTER_ID = 'SPOT-32429C';
-  const REFRESH_MS = 5 * 60 * 1000;  // buoy reports about every 30 min; check every 5 min
+  const REFRESH_MS = 5 * 60 * 1000;  // buoy sends a processed report about hourly; check every 5 min
   const API = 'https://api.sofarocean.com';
 
   // ---------- helpers ----------
@@ -217,7 +221,7 @@
     return names[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
   };
   const arrowSvg = deg => {
-    // Arrow shows where the wave/wind is heading (from-direction + 180), like a weather vane tail.
+    // Arrow points where the waves/wind are heading (from-direction + 180), like a weather vane.
     const heading = (deg + 180) % 360;
     return `<svg viewBox="0 0 24 24" style="transform:rotate(${heading}deg)" aria-hidden="true">
       <path d="M12 3 L17 13 L12 11 L7 13 Z" fill="currentColor"/>
@@ -234,7 +238,7 @@
   const local = iso => iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—';
   const setDir = (id, deg) => {
     if (deg === null || deg === undefined) { $(id).textContent = '—'; $(id + 'Arrow').innerHTML = ''; $(id + 'Note').textContent = '—'; return; }
-    $(id).textContent = `${Math.round(deg)}°`;
+    $(id).textContent = `${Math.round(deg) % 360}°`;
     $(id + 'Arrow').innerHTML = arrowSvg(deg);
     $(id + 'Note').textContent = `from ${compass(deg)}`;
   };
@@ -250,8 +254,11 @@
     if (!viewToken) throw new Error('No view token in response');
     return viewToken;
   }
-  async function fetchLatest() {
-    const url = tok => `${API}/api/latest-data?spotterId=${SPOTTER_ID}&includeWindData=true&includeSurfaceTempData=true&includeBarometerData=true&token=${tok}`;
+  async function fetchHistory() {
+    // Most recent records of every type. limit=12 covers the last few hours, enough to
+    // contain at least one processed (hdr) record even if the buoy skipped an hour.
+    const url = tok => `${API}/api/wave-data?spotterId=${SPOTTER_ID}&limit=12&processingSources=all`
+      + `&includeWaves=true&includeWindData=true&includeBarometerData=true&includePartitionData=true&includeTrack=true&token=${tok}`;
     let r = await fetch(url(await getToken()), { cache: 'no-store' });
     if (r.status === 401 || r.status === 403) r = await fetch(url(await getToken(true)), { cache: 'no-store' });
     if (!r.ok) throw new Error(`Data request failed (${r.status})`);
@@ -259,24 +266,41 @@
     if (!j.data) throw new Error('Unexpected response shape');
     return j.data;
   }
+  async function fetchDevice() {
+    // Battery, solar and humidity only come from the latest-data endpoint.
+    try {
+      const r = await fetch(`${API}/api/latest-data?spotterId=${SPOTTER_ID}&token=${await getToken()}`, { cache: 'no-store' });
+      if (!r.ok) return null;
+      return (await r.json()).data || null;
+    } catch { return null; }
+  }
+  // Prefer the newest HDR-processed record (what the Sofar dashboard shows); fall back to the newest embedded one.
+  const newest = (arr, source) => {
+    const list = (arr || []).filter(x => !source || x.processing_source === source);
+    if (!list.length) return null;
+    return list.reduce((a, b) => new Date(a.timestamp) > new Date(b.timestamp) ? a : b);
+  };
+  const pick = arr => newest(arr, 'hdr') || newest(arr, null);
 
   // ---------- render ----------
   let lastReport = null;
-  function render(d) {
-    const w = (d.waves || [])[0] || {};
-    const wind = (d.wind || [])[0] || null;
-    const baro = (d.barometerData || [])[0] || null;
-    const sst = (d.surfaceTemp || [])[0] || null;
-    const pos = (d.track || [])[0] || w;
+  function render(d, dev) {
+    const w = pick(d.waves) || {};
+    const wind = pick(d.wind);
+    const baro = pick(d.barometerData);
+    const part = pick(d.partitionData);
+    const pos = newest(d.track) || w;
 
-    lastReport = w.timestamp || pos.timestamp || null;
-    $('title').textContent = `Spotter ${d.spotterId}` + (d.spotterName ? ` · ${d.spotterName}` : '');
+    lastReport = w.timestamp || null;
+    $('title').textContent = `Spotter ${d.spotterId || SPOTTER_ID}`;
     $('reportTime').textContent = local(lastReport);
 
     const hsFt = w.significantWaveHeight != null ? w.significantWaveHeight * M_TO_FT : null;
     $('hs').textContent = fmt(hsFt, 1);
     $('hs').classList.remove('skel');
-    $('hsMeta').textContent = hsFt != null ? `${fmt(w.significantWaveHeight, 2)} m · ${d.commSource || ''} link` : 'No wave data in last report';
+    $('hsMeta').textContent = hsFt != null
+      ? `${fmt(w.significantWaveHeight, 2)} m · ${w.processing_source === 'hdr' ? 'processed hourly report' : 'raw buoy report'}`
+      : 'No wave data';
     $('tp').textContent = fmt(w.peakPeriod, 1);
     $('tm').textContent = fmt(w.meanPeriod, 1);
     setDir('pd', w.peakDirection);
@@ -285,7 +309,7 @@
 
     if (wind && wind.speed != null) {
       $('ws').textContent = fmt(wind.speed * MS_TO_MPH, 1);
-      $('wsNote').textContent = `${fmt(wind.speed * MS_TO_KT, 1)} kt · ${fmt(wind.speed, 1)} m/s`;
+      $('wsNote').textContent = `${fmt(wind.speed * MS_TO_KT, 1)} kt · ${fmt(wind.speed, 1)} m/s · ${local(wind.timestamp)}`;
       setDir('wd', wind.direction);
     } else {
       $('ws').textContent = '—'; $('wsNote').textContent = 'No wind data'; setDir('wd', null);
@@ -296,23 +320,33 @@
       $('bpNote').textContent = `${fmt(baro.value * 0.02953, 2)} inHg`;
     } else { $('bp').textContent = '—'; $('bpNote').textContent = 'No pressure data'; }
 
-    if (sst && sst.degrees != null) {
-      $('sst').textContent = fmt(sst.degrees * 9 / 5 + 32, 1);
-      $('sstNote').textContent = `${fmt(sst.degrees, 1)} °C`;
-    } else { $('sst').textContent = '—'; $('sstNote').textContent = 'Sensor not reporting'; }
+    // Partitions: lowest frequency band = swell, highest = sea.
+    const parts = (part && part.partitions ? [...part.partitions] : []).sort((a, b) => a.startFrequency - b.startFrequency);
+    const swell = parts[0] || null, sea = parts[parts.length - 1] || null;
+    const setPart = (p, prefix) => {
+      $(prefix + 'Hs').textContent = p ? fmt(p.significantWaveHeight * M_TO_FT, 1) : '—';
+      $(prefix + 'Tm').textContent = p ? fmt(p.meanPeriod, 1) : '—';
+      $(prefix + 'Dir').textContent = p && p.meanDirection != null ? `${Math.round(p.meanDirection) % 360}°` : '—';
+      $(prefix + 'DirNote').textContent = p && p.meanDirection != null ? `from ${compass(p.meanDirection)}` : '';
+    };
+    setPart(swell, 'sw');
+    setPart(parts.length > 1 ? sea : null, 'se');
 
-    if (pos.latitude != null && pos.longitude != null) {
+    if (pos && pos.latitude != null && pos.longitude != null) {
       const la = Number(pos.latitude), lo = Number(pos.longitude);
       $('pos').textContent = `${Math.abs(la).toFixed(4)}° ${la >= 0 ? 'N' : 'S'}, ${Math.abs(lo).toFixed(4)}° ${lo >= 0 ? 'E' : 'W'}`;
       $('pos').href = `https://www.google.com/maps?q=${la},${lo}`;
       $('posNote').textContent = 'Open in Google Maps';
     }
 
-    $('batt').textContent = fmt(d.batteryVoltage, 2);
-    const bits = [];
-    if (d.solarVoltage != null) bits.push(`solar ${fmt(d.solarVoltage, 2)} V`);
-    if (d.humidity != null) bits.push(`humidity ${Math.round(d.humidity)}%`);
-    $('battNote').textContent = bits.join(' · ') || '—';
+    if (dev) {
+      $('batt').textContent = fmt(dev.batteryVoltage, 2);
+      const bits = [];
+      if (dev.solarVoltage != null) bits.push(`solar ${fmt(dev.solarVoltage, 2)} V`);
+      if (dev.humidity != null) bits.push(`humidity ${Math.round(dev.humidity)}%`);
+      if (dev.commSource) bits.push(`${dev.commSource} link`);
+      $('battNote').textContent = bits.join(' · ') || '—';
+    }
 
     updateAgo();
   }
@@ -320,9 +354,9 @@
     if (!lastReport) return;
     const el = $('reportAgo');
     el.textContent = `(${ago(lastReport)})`;
-    const stale = Date.now() - new Date(lastReport).getTime() > 2 * 60 * 60 * 1000;
+    const stale = Date.now() - new Date(lastReport).getTime() > 3 * 60 * 60 * 1000;
     el.classList.toggle('stale', stale);
-    if (stale) el.textContent += ' · no fresh report in 2 h';
+    if (stale) el.textContent += ' · no fresh report in 3 h';
   }
 
   // ---------- loop ----------
@@ -331,17 +365,15 @@
     const btn = $('refresh');
     btn.disabled = true; btn.textContent = 'Refreshing…';
     try {
-      render(await fetchLatest());
+      const [hist, dev] = await Promise.all([fetchHistory(), fetchDevice()]);
+      render(hist, dev);
       $('error').classList.remove('show');
     } catch (e) {
       let hint = '';
       if (/failed to fetch|networkerror|load failed/i.test(e.message)) {
-        hint = ' The request to api.sofarocean.com was blocked before it left the browser. Common causes: '
-          + 'this page is being shown inside an app preview (the Claude app, an email client, a file viewer) instead of a real browser tab, '
-          + 'or an ad blocker / privacy extension is blocking api.sofarocean.com. '
-          + 'Save the file, open it in Chrome, Edge or Firefox directly, and allow that domain in your blocker if you have one.';
+        hint = ' Check your connection, or an ad blocker may be blocking api.sofarocean.com.';
       }
-      $('error').textContent = `Could not load new data: ${e.message}.${hint} Will retry automatically.`;
+      $('error').textContent = `Could not load new data: ${e.message}.${hint} Showing last values. Will retry automatically.`;
       $('error').classList.add('show');
     } finally {
       $('checkedTime').textContent = new Date().toLocaleTimeString([], { timeStyle: 'short' });
@@ -359,7 +391,6 @@
     if (nextAt && Date.now() >= nextAt) refresh();
   }, 1000);
 
-  // Refresh right away when the tab becomes visible again after being hidden a while.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && nextAt && Date.now() > nextAt - REFRESH_MS + 60000) refresh();
   });
