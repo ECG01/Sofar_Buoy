@@ -187,7 +187,7 @@
     </div>
   </section>
 
-  <h2>Swell and sea</h2>
+  <h2>Swell and sea <span id="partTime" style="font-weight:500;text-transform:none;letter-spacing:0"></span></h2>
   <section class="parts">
     <div class="part">
       <div class="title">Swell</div>
@@ -221,7 +221,7 @@
 
   <footer>
     Data: <a id="srcLink" href="https://spotter.sofarocean.com/public/SPOT-32429C" target="_blank" rel="noopener">Sofar Ocean public Spotter page</a>.
-    Uses the same processed (HDR) hourly data as the Sofar dashboard. Wave height converted from meters to feet; wind from m/s to mph.
+    Shows the newest report from the buoy: processed hourly reports (same as the Sofar dashboard) or, when those lag behind, the raw 30-minute reports. Wave height converted from meters to feet; wind from m/s to mph.
     Directions are the direction waves and wind come <em>from</em>.
     Auto-refreshes every <span id="intervalLabel"></span> while this page is open.
   </footer>
@@ -277,9 +277,9 @@
     return viewToken;
   }
   async function fetchHistory() {
-    // Most recent records of every type. limit=12 covers the last few hours, enough to
+    // Most recent records of every type. limit=48 covers well over a day, enough to
     // contain at least one processed (hdr) record even if the buoy skipped an hour.
-    const url = tok => `${API}/api/wave-data?spotterId=${SPOTTER_ID}&limit=12&processingSources=all`
+    const url = tok => `${API}/api/wave-data?spotterId=${SPOTTER_ID}&limit=48&processingSources=all`
       + `&includeWaves=true&includeWindData=true&includePartitionData=true&token=${tok}`;
     let r = await fetch(url(await getToken()), { cache: 'no-store' });
     if (r.status === 401 || r.status === 403) r = await fetch(url(await getToken(true)), { cache: 'no-store' });
@@ -291,7 +291,7 @@
   async function fetchLast24h() {
     // Processed (hdr) hourly records for the charts, same as the dashboard plots.
     const start = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const url = tok => `${API}/api/wave-data?spotterId=${SPOTTER_ID}&startDate=${start}&limit=200&processingSources=hdr`
+    const url = tok => `${API}/api/wave-data?spotterId=${SPOTTER_ID}&startDate=${start}&limit=200&processingSources=all`
       + `&includeWaves=true&includeWindData=true&token=${tok}`;
     let r = await fetch(url(await getToken()), { cache: 'no-store' });
     if (r.status === 401 || r.status === 403) r = await fetch(url(await getToken(true)), { cache: 'no-store' });
@@ -309,9 +309,10 @@
   // ---------- render ----------
   let lastReport = null;
   function render(d) {
-    const w = pick(d.waves) || {};
-    const wind = pick(d.wind);
+    const w = newest(d.waves) || {};
+    const wind = newest(d.wind);
     const part = pick(d.partitionData);
+    const hdrW = newest(d.waves, 'hdr');
 
     lastReport = w.timestamp || null;
     $('title').textContent = `Spotter ${d.spotterId || SPOTTER_ID}`;
@@ -321,7 +322,7 @@
     $('hs').textContent = fmt(hsFt, 1);
     $('hs').classList.remove('skel');
     $('hsMeta').textContent = hsFt != null
-      ? `${fmt(w.significantWaveHeight, 2)} m · ${w.processing_source === 'hdr' ? 'processed hourly report' : 'raw buoy report'}`
+      ? `${fmt(w.significantWaveHeight, 2)} m · ${w.processing_source === 'hdr' ? 'processed hourly report' : 'raw 30-min report' + (hdrW ? ` · last processed ${local(hdrW.timestamp)}` : '')}`
       : 'No wave data';
     $('tp').textContent = fmt(w.peakPeriod, 1);
     $('tm').textContent = fmt(w.meanPeriod, 1);
@@ -346,6 +347,7 @@
       $(prefix + 'Dir').textContent = p && p.meanDirection != null ? `${Math.round(p.meanDirection) % 360}°` : '—';
       $(prefix + 'DirNote').textContent = p && p.meanDirection != null ? `from ${compass(p.meanDirection)}` : '';
     };
+    $('partTime').textContent = part ? `· processed report of ${local(part.timestamp)}` : '';
     setPart(swell, 'sw');
     setPart(parts.length > 1 ? sea : null, 'se');
 
@@ -450,7 +452,7 @@
       xhair.setAttribute('x1', x); xhair.setAttribute('x2', x); xhair.setAttribute('visibility', 'visible');
       tip.replaceChildren();
       const when = document.createElement('div'); when.className = 't';
-      when.textContent = new Date(best.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+      when.textContent = new Date(best.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + (best.raw ? ' · raw report' : '');
       tip.appendChild(when);
       c.lanes.forEach((lane, i) => {
         const v = best[lane.key];
@@ -480,8 +482,12 @@
   }
   function renderCharts(h) {
     const byTime = a => a.map(p => ({ t: new Date(p.timestamp).getTime(), ...p })).sort((a, b) => a.t - b.t);
+    // Processed (hdr) hourly points, plus raw points newer than the last processed one so the line reaches now.
+    const blend = a => { const all = byTime(a); const hdr = all.filter(p => p.processing_source === 'hdr');
+      const lastHdr = hdr.length ? hdr[hdr.length - 1].t : -Infinity;
+      return hdr.concat(all.filter(p => p.processing_source !== 'hdr' && p.t > lastHdr)); };
     charts.chHs = {
-      points: byTime(h.waves || []).map(p => ({ t: p.t, hs: p.significantWaveHeight * M_TO_FT, tp: p.peakPeriod, dir: p.peakDirection })),
+      points: blend(h.waves || []).map(p => ({ t: p.t, raw: p.processing_source !== 'hdr', hs: p.significantWaveHeight * M_TO_FT, tp: p.peakPeriod, dir: p.peakDirection })),
       lanes: [
         { key: 'hs', label: 'Height', unit: 'ft', dec: 1, h: 150 },
         { key: 'tp', label: 'Peak period', unit: 's', dec: 1, h: 70, steps: 2 },
@@ -489,7 +495,7 @@
       arrowKey: 'dir',
     };
     charts.chWs = {
-      points: byTime(h.wind || []).map(p => ({ t: p.t, ws: p.speed * MS_TO_MPH, dir: p.direction })),
+      points: blend(h.wind || []).map(p => ({ t: p.t, raw: p.processing_source !== 'hdr', ws: p.speed * MS_TO_MPH, dir: p.direction })),
       lanes: [{ key: 'ws', label: 'Wind speed', unit: 'mph', dec: 1, h: 150 }],
       arrowKey: 'dir',
     };
