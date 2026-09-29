@@ -105,6 +105,28 @@
   }
   .arrow svg { width: 14px; height: 14px; }
 
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 8px; min-width: 0; }
+  .chart .ct { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
+  .chart .ct small { font-weight: 500; color: var(--ink-3); }
+  .cwrap { position: relative; width: 100%; }
+  .cwrap svg { display: block; width: 100%; height: 220px; touch-action: pan-y; }
+  .cwrap svg text { font-family: inherit; font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .cwrap .grid-line { stroke: var(--line); stroke-width: 1; }
+  .cwrap .series { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .cwrap .area { fill: var(--accent); opacity: .10; }
+  .cwrap .end { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+  .cwrap .end-label { fill: var(--ink); font-weight: 600; font-size: 12px; }
+  .cwrap .xhair { stroke: var(--ink-3); stroke-width: 1; }
+  .cwrap .empty { fill: var(--ink-3); font-size: 13px; }
+  .tip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 9px; font-size: 12px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap;
+  }
+  .tip b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tip .t { color: var(--ink-3); }
+
   footer { font-size: 12px; color: var(--ink-3); margin-top: 24px; }
   footer a { color: var(--accent); }
   .skel { color: var(--ink-3); }
@@ -197,6 +219,18 @@
     </div>
   </section>
 
+  <h2>Last 24 hours</h2>
+  <section class="charts">
+    <div class="chart">
+      <div class="ct"><span>Significant wave height</span><small>ft</small></div>
+      <div class="cwrap"><svg id="chHs" role="img" aria-label="Significant wave height over the last 24 hours"></svg><div class="tip" id="tipHs"></div></div>
+    </div>
+    <div class="chart">
+      <div class="ct"><span>Wind speed</span><small>mph</small></div>
+      <div class="cwrap"><svg id="chWs" role="img" aria-label="Wind speed over the last 24 hours"></svg><div class="tip" id="tipWs"></div></div>
+    </div>
+  </section>
+
   <footer>
     Data: <a id="srcLink" href="https://spotter.sofarocean.com/public/SPOT-32429C" target="_blank" rel="noopener">Sofar Ocean public Spotter page</a>.
     Uses the same processed (HDR) hourly data as the Sofar dashboard. Wave height converted from meters to feet; wind from m/s to mph.
@@ -265,6 +299,16 @@
     const j = await r.json();
     if (!j.data) throw new Error('Unexpected response shape');
     return j.data;
+  }
+  async function fetchLast24h() {
+    // Processed (hdr) hourly records for the charts, same as the dashboard plots.
+    const start = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const url = tok => `${API}/api/wave-data?spotterId=${SPOTTER_ID}&startDate=${start}&limit=200&processingSources=hdr`
+      + `&includeWaves=true&includeWindData=true&token=${tok}`;
+    let r = await fetch(url(await getToken()), { cache: 'no-store' });
+    if (r.status === 401 || r.status === 403) r = await fetch(url(await getToken(true)), { cache: 'no-store' });
+    if (!r.ok) throw new Error(`History request failed (${r.status})`);
+    return (await r.json()).data || {};
   }
   async function fetchDevice() {
     // Battery, solar and humidity only come from the latest-data endpoint.
@@ -350,6 +394,106 @@
 
     updateAgo();
   }
+  // ---------- charts ----------
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (name, attrs = {}) => { const e = document.createElementNS(NS, name); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+  const charts = {};   // id -> {points, unit, decimals}
+
+  function niceMax(v) {
+    if (!(v > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    const f = v / p;
+    const n = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+    return n * p;
+  }
+  function drawChart(id) {
+    const c = charts[id]; if (!c) return;
+    const svg = $(id), tip = $('tip' + id.slice(2));
+    svg.replaceChildren();
+    const W = svg.clientWidth || 300, H = 220;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const m = { l: 34, r: 14, t: 16, b: 24 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const now = Date.now(), t0 = now - 24 * 3600 * 1000;
+    const pts = c.points.filter(p => p.t >= t0 && p.t <= now + 60000);
+
+    if (!pts.length) {
+      svg.appendChild(Object.assign(el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'empty' }), { textContent: 'No processed reports in the last 24 hours' }));
+      return;
+    }
+    // Round the axis to 4 equal steps of a "nice" size so every label is a round number.
+    const steps = 4;
+    const step = niceMax(Math.max(...pts.map(p => p.v)) * 1.15 / steps);
+    const ymax = step * steps;
+    const yDec = step < 1 ? 1 : 0;
+    const X = t => m.l + (t - t0) / (now - t0) * iw;
+    const Y = v => m.t + ih - (v / ymax) * ih;
+
+    // horizontal grid + y labels
+    for (let i = 0; i <= steps; i++) {
+      const v = step * i, y = Y(v);
+      svg.appendChild(el('line', { x1: m.l, x2: W - m.r, y1: y, y2: y, class: 'grid-line' }));
+      svg.appendChild(Object.assign(el('text', { x: m.l - 6, y: y + 4, 'text-anchor': 'end' }), { textContent: fmt(v, yDec) }));
+    }
+    // x labels every 6 h, on the hour
+    const firstTick = new Date(t0); firstTick.setMinutes(0, 0, 0); firstTick.setHours(firstTick.getHours() + 1);
+    for (let t = firstTick.getTime(); t <= now; t += 3600 * 1000) {
+      if (new Date(t).getHours() % 6 !== 0) continue;
+      const lbl = new Date(t).toLocaleTimeString([], { hour: 'numeric' });
+      svg.appendChild(Object.assign(el('text', { x: X(t), y: H - 6, 'text-anchor': 'middle' }), { textContent: lbl }));
+    }
+
+    // area + line
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join(' ');
+    const base = Y(0);
+    svg.appendChild(el('path', { d: `${line} L${X(pts[pts.length - 1].t).toFixed(1)},${base} L${X(pts[0].t).toFixed(1)},${base} Z`, class: 'area' }));
+    svg.appendChild(el('path', { d: line, class: 'series' }));
+
+    // endpoint marker + direct label
+    const last = pts[pts.length - 1];
+    svg.appendChild(el('circle', { cx: X(last.t), cy: Y(last.v), r: 4.5, class: 'end' }));
+    const lx = X(last.t), anchor = lx > W - 60 ? 'end' : 'start';
+    svg.appendChild(Object.assign(el('text', { x: lx + (anchor === 'end' ? -8 : 8), y: Y(last.v) - 8, 'text-anchor': anchor, class: 'end-label' }), { textContent: fmt(last.v, c.decimals) + ' ' + c.unit }));
+
+    // hover layer: crosshair snaps to nearest point
+    const xhair = el('line', { y1: m.t, y2: m.t + ih, class: 'xhair', visibility: 'hidden' });
+    const dot = el('circle', { r: 4.5, class: 'end', visibility: 'hidden' });
+    svg.appendChild(xhair); svg.appendChild(dot);
+    const hit = el('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' });
+    svg.appendChild(hit);
+    const show = clientX => {
+      const rect = svg.getBoundingClientRect();
+      const px = (clientX - rect.left) * (W / rect.width);
+      let best = pts[0], bd = Infinity;
+      for (const p of pts) { const d = Math.abs(X(p.t) - px); if (d < bd) { bd = d; best = p; } }
+      const x = X(best.t), y = Y(best.v);
+      xhair.setAttribute('x1', x); xhair.setAttribute('x2', x); xhair.setAttribute('visibility', 'visible');
+      dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('visibility', 'visible');
+      tip.replaceChildren();
+      const b = document.createElement('b'); b.textContent = `${fmt(best.v, c.decimals)} ${c.unit}`;
+      const t = document.createElement('div'); t.className = 't';
+      t.textContent = new Date(best.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + (best.extra ? ` · ${best.extra}` : '');
+      tip.append(b, t);
+      tip.style.display = 'block';
+      const sx = x * (rect.width / W), flip = sx > rect.width * 0.65;
+      tip.style.left = flip ? '' : `${sx + 12}px`;
+      tip.style.right = flip ? `${rect.width - sx + 12}px` : '';
+      tip.style.top = `${Math.max(0, y * (rect.height / H) - 40)}px`;
+    };
+    const hide = () => { xhair.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.style.display = 'none'; };
+    hit.addEventListener('pointermove', e => show(e.clientX));
+    hit.addEventListener('pointerdown', e => show(e.clientX));
+    hit.addEventListener('pointerleave', hide);
+  }
+  function setChart(id, points, unit, decimals) { charts[id] = { points, unit, decimals }; drawChart(id); }
+  function renderCharts(h) {
+    const byTime = a => a.map(p => ({ t: new Date(p.timestamp).getTime(), ...p })).sort((a, b) => a.t - b.t);
+    setChart('chHs', byTime(h.waves || []).map(p => ({ t: p.t, v: p.significantWaveHeight * M_TO_FT, extra: `Tp ${fmt(p.peakPeriod, 0)} s` })), 'ft', 1);
+    setChart('chWs', byTime(h.wind || []).map(p => ({ t: p.t, v: p.speed * MS_TO_MPH, extra: `from ${compass(p.direction)} ${Math.round(p.direction)}°` })), 'mph', 1);
+  }
+  let resizeTimer;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => Object.keys(charts).forEach(drawChart), 150); });
+
   function updateAgo() {
     if (!lastReport) return;
     const el = $('reportAgo');
@@ -365,8 +509,9 @@
     const btn = $('refresh');
     btn.disabled = true; btn.textContent = 'Refreshing…';
     try {
-      const [hist, dev] = await Promise.all([fetchHistory(), fetchDevice()]);
+      const [hist, dev, last24] = await Promise.all([fetchHistory(), fetchDevice(), fetchLast24h().catch(() => null)]);
       render(hist, dev);
+      if (last24) renderCharts(last24);
       $('error').classList.remove('show');
     } catch (e) {
       let hint = '';
