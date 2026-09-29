@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spotter Live Readout</title>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --ink: #17202a;
+    --ink-2: #4b5563;
+    --ink-3: #8a94a3;
+    --line: #e1e5ea;
+    --accent: #1d6fc9;
+    --accent-soft: #e4eefb;
+    --ok: #1f7a4d;
+    --warn: #b7791f;
+    --bad: #c0392b;
+    --bad-soft: #fbe9e7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1419;
+      --card: #171d25;
+      --ink: #eef2f6;
+      --ink-2: #b4bcc8;
+      --ink-3: #7b8594;
+      --line: #2a323d;
+      --accent: #5aa2f2;
+      --accent-soft: #1b2a3d;
+      --ok: #4ccb8a;
+      --warn: #e2b04f;
+      --bad: #ef7365;
+      --bad-soft: #3a1f1c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1419; --card: #171d25; --ink: #eef2f6; --ink-2: #b4bcc8; --ink-3: #7b8594;
+    --line: #2a323d; --accent: #5aa2f2; --accent-soft: #1b2a3d; --ok: #4ccb8a;
+    --warn: #e2b04f; --bad: #ef7365; --bad-soft: #3a1f1c;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.4;
+    padding: 20px 16px 40px;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px;
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  header .sub { color: var(--ink-2); font-size: 14px; }
+  header .spacer { flex: 1; }
+  button {
+    font: inherit; font-size: 14px;
+    color: var(--accent); background: var(--accent-soft);
+    border: 1px solid transparent; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+
+  .status {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    font-size: 13px; color: var(--ink-3); margin-bottom: 18px;
+  }
+  .status b { font-weight: 500; color: var(--ink-2); }
+  .status .stale { color: var(--warn); }
+
+  .error {
+    display: none;
+    background: var(--bad-soft); color: var(--bad);
+    border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 18px;
+  }
+  .error.show { display: block; }
+
+  .hero {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px 24px; margin-bottom: 14px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px;
+  }
+  .hero .label { font-size: 14px; color: var(--ink-2); }
+  .hero .value { font-size: 56px; font-weight: 600; line-height: 1; letter-spacing: -0.5px; }
+  .hero .value small { font-size: 22px; font-weight: 500; color: var(--ink-2); margin-left: 6px; }
+  .hero .meta { font-size: 13px; color: var(--ink-3); margin-top: 6px; }
+  .hero .side { display: flex; gap: 28px; }
+  .hero .side .k { font-size: 12px; color: var(--ink-3); }
+  .hero .side .v { font-size: 20px; font-weight: 600; }
+  .hero .side .v small { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;
+  }
+  .tile {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; min-height: 96px;
+  }
+  .tile .k { font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+  .tile .v { font-size: 26px; font-weight: 600; line-height: 1.1; }
+  .tile .v small { font-size: 13px; font-weight: 500; color: var(--ink-2); margin-left: 4px; }
+  .tile .n { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+  .tile a { color: var(--accent); text-decoration: none; }
+
+  .dir { display: inline-flex; align-items: center; gap: 8px; }
+  .arrow {
+    width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
+    display: inline-grid; place-items: center; color: var(--accent); flex: none;
+  }
+  .arrow svg { width: 14px; height: 14px; }
+
+  footer { font-size: 12px; color: var(--ink-3); margin-top: 24px; }
+  footer a { color: var(--accent); }
+
+  .skel { color: var(--ink-3); }
+  .rows { display: none; }
+  .rows.show { display: block; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">Spotter SPOT-32429C</h1>
+    <span class="sub">live readout</span>
+    <span class="spacer"></span>
+    <button id="refresh" type="button">Refresh now</button>
+  </header>
+
+  <div class="status">
+    <span>Last report from buoy: <b id="reportTime">…</b> <span id="reportAgo"></span></span>
+    <span>Page checked: <b id="checkedTime">never</b></span>
+    <span>Next check in <b id="countdown">—</b></span>
+  </div>
+
+  <div class="error" id="error"></div>
+
+  <section class="hero">
+    <div>
+      <div class="label">Significant wave height</div>
+      <div class="value"><span id="hs" class="skel">—</span><small>ft</small></div>
+      <div class="meta" id="hsMeta">Waiting for data</div>
+    </div>
+    <div class="side">
+      <div><div class="k">Peak period</div><div class="v"><span id="tp">—</span> <small>s</small></div></div>
+      <div><div class="k">Mean period</div><div class="v"><span id="tm">—</span> <small>s</small></div></div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="tile">
+      <div class="k">Peak wave direction</div>
+      <div class="v dir"><span class="arrow" id="pdArrow"></span><span id="pd">—</span></div>
+      <div class="n" id="pdNote">from</div>
+    </div>
+    <div class="tile">
+      <div class="k">Mean wave direction</div>
+      <div class="v dir"><span class="arrow" id="mdArrow"></span><span id="md">—</span></div>
+      <div class="n" id="mdNote">from</div>
+    </div>
+    <div class="tile">
+      <div class="k">Wind speed</div>
+      <div class="v"><span id="ws">—</span><small>mph</small></div>
+      <div class="n" id="wsNote">—</div>
+    </div>
+    <div class="tile">
+      <div class="k">Wind direction</div>
+      <div class="v dir"><span class="arrow" id="wdArrow"></span><span id="wd">—</span></div>
+      <div class="n" id="wdNote">from</div>
+    </div>
+    <div class="tile">
+      <div class="k">Barometric pressure</div>
+      <div class="v"><span id="bp">—</span><small>mbar</small></div>
+      <div class="n" id="bpNote">—</div>
+    </div>
+    <div class="tile">
+      <div class="k">Sea surface temperature</div>
+      <div class="v"><span id="sst">—</span><small id="sstUnit">°F</small></div>
+      <div class="n" id="sstNote">—</div>
+    </div>
+    <div class="tile">
+      <div class="k">Position</div>
+      <div class="v" style="font-size:18px"><a id="pos" href="#" target="_blank" rel="noopener">—</a></div>
+      <div class="n" id="posNote">—</div>
+    </div>
+    <div class="tile">
+      <div class="k">Buoy health</div>
+      <div class="v"><span id="batt">—</span><small>V battery</small></div>
+      <div class="n" id="battNote">—</div>
+    </div>
+  </section>
+
+  <footer>
+    Data: <a id="srcLink" href="https://spotter.sofarocean.com/public/SPOT-32429C" target="_blank" rel="noopener">Sofar Ocean public Spotter page</a>.
+    Wave height converted from meters to feet; wind from m/s to mph. Directions are the direction waves and wind come <em>from</em>.
+    Auto-refreshes every <span id="intervalLabel"></span> while this page is open.
+  </footer>
+</main>
+
+<script>
+(() => {
+  // ---------- settings ----------
+  const SPOTTER_ID = 'SPOT-32429C';
+  const REFRESH_MS = 5 * 60 * 1000;  // buoy reports about every 30 min; check every 5 min
+  const API = 'https://api.sofarocean.com';
+
+  // ---------- helpers ----------
+  const $ = id => document.getElementById(id);
+  const M_TO_FT = 3.28084, MS_TO_MPH = 2.23694, MS_TO_KT = 1.94384;
+  const fmt = (n, d = 1) => (n === null || n === undefined || Number.isNaN(n)) ? '—' : Number(n).toFixed(d);
+  const compass = deg => {
+    const names = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return names[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+  };
+  const arrowSvg = deg => {
+    // Arrow shows where the wave/wind is heading (from-direction + 180), like a weather vane tail.
+    const heading = (deg + 180) % 360;
+    return `<svg viewBox="0 0 24 24" style="transform:rotate(${heading}deg)" aria-hidden="true">
+      <path d="M12 3 L17 13 L12 11 L7 13 Z" fill="currentColor"/>
+      <path d="M12 11 V21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+  };
+  const ago = iso => {
+    if (!iso) return '';
+    const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    return `${h} h ${m % 60} min ago`;
+  };
+  const local = iso => iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  const setDir = (id, deg) => {
+    if (deg === null || deg === undefined) { $(id).textContent = '—'; $(id + 'Arrow').innerHTML = ''; $(id + 'Note').textContent = '—'; return; }
+    $(id).textContent = `${Math.round(deg)}°`;
+    $(id + 'Arrow').innerHTML = arrowSvg(deg);
+    $(id + 'Note').textContent = `from ${compass(deg)}`;
+  };
+
+  // ---------- data ----------
+  let viewToken = null;
+  async function getToken(force = false) {
+    if (viewToken && !force) return viewToken;
+    const r = await fetch(`${API}/fetch/get-view-token?domain=spotters`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`Token request failed (${r.status})`);
+    const j = await r.json();
+    viewToken = j?.data?.viewToken;
+    if (!viewToken) throw new Error('No view token in response');
+    return viewToken;
+  }
+  async function fetchLatest() {
+    const url = tok => `${API}/api/latest-data?spotterId=${SPOTTER_ID}&includeWindData=true&includeSurfaceTempData=true&includeBarometerData=true&token=${tok}`;
+    let r = await fetch(url(await getToken()), { cache: 'no-store' });
+    if (r.status === 401 || r.status === 403) r = await fetch(url(await getToken(true)), { cache: 'no-store' });
+    if (!r.ok) throw new Error(`Data request failed (${r.status})`);
+    const j = await r.json();
+    if (!j.data) throw new Error('Unexpected response shape');
+    return j.data;
+  }
+
+  // ---------- render ----------
+  let lastReport = null;
+  function render(d) {
+    const w = (d.waves || [])[0] || {};
+    const wind = (d.wind || [])[0] || null;
+    const baro = (d.barometerData || [])[0] || null;
+    const sst = (d.surfaceTemp || [])[0] || null;
+    const pos = (d.track || [])[0] || w;
+
+    lastReport = w.timestamp || pos.timestamp || null;
+    $('title').textContent = `Spotter ${d.spotterId}` + (d.spotterName ? ` · ${d.spotterName}` : '');
+    $('reportTime').textContent = local(lastReport);
+
+    const hsFt = w.significantWaveHeight != null ? w.significantWaveHeight * M_TO_FT : null;
+    $('hs').textContent = fmt(hsFt, 1);
+    $('hs').classList.remove('skel');
+    $('hsMeta').textContent = hsFt != null ? `${fmt(w.significantWaveHeight, 2)} m · ${d.commSource || ''} link` : 'No wave data in last report';
+    $('tp').textContent = fmt(w.peakPeriod, 1);
+    $('tm').textContent = fmt(w.meanPeriod, 1);
+    setDir('pd', w.peakDirection);
+    setDir('md', w.meanDirection);
+    if (w.peakDirectionalSpread != null) $('pdNote').textContent += ` · spread ${Math.round(w.peakDirectionalSpread)}°`;
+
+    if (wind && wind.speed != null) {
+      $('ws').textContent = fmt(wind.speed * MS_TO_MPH, 1);
+      $('wsNote').textContent = `${fmt(wind.speed * MS_TO_KT, 1)} kt · ${fmt(wind.speed, 1)} m/s`;
+      setDir('wd', wind.direction);
+    } else {
+      $('ws').textContent = '—'; $('wsNote').textContent = 'No wind data'; setDir('wd', null);
+    }
+
+    if (baro && baro.value != null) {
+      $('bp').textContent = fmt(baro.value, 1);
+      $('bpNote').textContent = `${fmt(baro.value * 0.02953, 2)} inHg`;
+    } else { $('bp').textContent = '—'; $('bpNote').textContent = 'No pressure data'; }
+
+    if (sst && sst.degrees != null) {
+      $('sst').textContent = fmt(sst.degrees * 9 / 5 + 32, 1);
+      $('sstNote').textContent = `${fmt(sst.degrees, 1)} °C`;
+    } else { $('sst').textContent = '—'; $('sstNote').textContent = 'Sensor not reporting'; }
+
+    if (pos.latitude != null && pos.longitude != null) {
+      const la = Number(pos.latitude), lo = Number(pos.longitude);
+      $('pos').textContent = `${Math.abs(la).toFixed(4)}° ${la >= 0 ? 'N' : 'S'}, ${Math.abs(lo).toFixed(4)}° ${lo >= 0 ? 'E' : 'W'}`;
+      $('pos').href = `https://www.google.com/maps?q=${la},${lo}`;
+      $('posNote').textContent = 'Open in Google Maps';
+    }
+
+    $('batt').textContent = fmt(d.batteryVoltage, 2);
+    const bits = [];
+    if (d.solarVoltage != null) bits.push(`solar ${fmt(d.solarVoltage, 2)} V`);
+    if (d.humidity != null) bits.push(`humidity ${Math.round(d.humidity)}%`);
+    $('battNote').textContent = bits.join(' · ') || '—';
+
+    updateAgo();
+  }
+  function updateAgo() {
+    if (!lastReport) return;
+    const el = $('reportAgo');
+    el.textContent = `(${ago(lastReport)})`;
+    const stale = Date.now() - new Date(lastReport).getTime() > 2 * 60 * 60 * 1000;
+    el.classList.toggle('stale', stale);
+    if (stale) el.textContent += ' · no fresh report in 2 h';
+  }
+
+  // ---------- loop ----------
+  let nextAt = 0;
+  async function refresh() {
+    const btn = $('refresh');
+    btn.disabled = true; btn.textContent = 'Refreshing…';
+    try {
+      render(await fetchLatest());
+      $('error').classList.remove('show');
+    } catch (e) {
+      let hint = '';
+      if (/failed to fetch|networkerror|load failed/i.test(e.message)) {
+        hint = ' The request to api.sofarocean.com was blocked before it left the browser. Common causes: '
+          + 'this page is being shown inside an app preview (the Claude app, an email client, a file viewer) instead of a real browser tab, '
+          + 'or an ad blocker / privacy extension is blocking api.sofarocean.com. '
+          + 'Save the file, open it in Chrome, Edge or Firefox directly, and allow that domain in your blocker if you have one.';
+      }
+      $('error').textContent = `Could not load new data: ${e.message}.${hint} Will retry automatically.`;
+      $('error').classList.add('show');
+    } finally {
+      $('checkedTime').textContent = new Date().toLocaleTimeString([], { timeStyle: 'short' });
+      nextAt = Date.now() + REFRESH_MS;
+      btn.disabled = false; btn.textContent = 'Refresh now';
+    }
+  }
+  $('refresh').addEventListener('click', refresh);
+  $('intervalLabel').textContent = `${Math.round(REFRESH_MS / 60000)} minutes`;
+
+  setInterval(() => {
+    const s = Math.max(0, Math.round((nextAt - Date.now()) / 1000));
+    $('countdown').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    updateAgo();
+    if (nextAt && Date.now() >= nextAt) refresh();
+  }, 1000);
+
+  // Refresh right away when the tab becomes visible again after being hidden a while.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && nextAt && Date.now() > nextAt - REFRESH_MS + 60000) refresh();
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>
