@@ -111,6 +111,9 @@
   .chart .ct small { font-weight: 500; color: var(--ink-3); }
   .cwrap { position: relative; width: 100%; }
   .cwrap svg { display: block; width: 100%; height: 220px; touch-action: pan-y; }
+  .cwrap .dir-arrow path { fill: var(--accent); }
+  .cwrap .dir-arrow line { stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; }
+  .cwrap .lane-label { fill: var(--ink-2); font-weight: 600; font-size: 12px; }
   .cwrap svg text { font-family: inherit; font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
   .cwrap .grid-line { stroke: var(--line); stroke-width: 1; }
   .cwrap .series { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -182,21 +185,6 @@
       <div class="v dir"><span class="arrow" id="wdArrow"></span><span id="wd">—</span></div>
       <div class="n" id="wdNote">from</div>
     </div>
-    <div class="tile">
-      <div class="k">Barometric pressure</div>
-      <div class="v"><span id="bp">—</span><small>mbar</small></div>
-      <div class="n" id="bpNote">—</div>
-    </div>
-    <div class="tile">
-      <div class="k">Position</div>
-      <div class="v" style="font-size:18px"><a id="pos" href="#" target="_blank" rel="noopener">—</a></div>
-      <div class="n" id="posNote">—</div>
-    </div>
-    <div class="tile">
-      <div class="k">Buoy health</div>
-      <div class="v"><span id="batt">—</span><small>V battery</small></div>
-      <div class="n" id="battNote">—</div>
-    </div>
   </section>
 
   <h2>Swell and sea</h2>
@@ -222,11 +210,11 @@
   <h2>Last 24 hours</h2>
   <section class="charts">
     <div class="chart">
-      <div class="ct"><span>Significant wave height</span><small>ft</small></div>
-      <div class="cwrap"><svg id="chHs" role="img" aria-label="Significant wave height over the last 24 hours"></svg><div class="tip" id="tipHs"></div></div>
+      <div class="ct"><span>Wave height, peak period and direction</span><small>ft · s</small></div>
+      <div class="cwrap"><svg id="chHs" role="img" aria-label="Significant wave height, peak period and peak direction over the last 24 hours"></svg><div class="tip" id="tipHs"></div></div>
     </div>
     <div class="chart">
-      <div class="ct"><span>Wind speed</span><small>mph</small></div>
+      <div class="ct"><span>Wind speed and direction</span><small>mph</small></div>
       <div class="cwrap"><svg id="chWs" role="img" aria-label="Wind speed over the last 24 hours"></svg><div class="tip" id="tipWs"></div></div>
     </div>
   </section>
@@ -292,7 +280,7 @@
     // Most recent records of every type. limit=12 covers the last few hours, enough to
     // contain at least one processed (hdr) record even if the buoy skipped an hour.
     const url = tok => `${API}/api/wave-data?spotterId=${SPOTTER_ID}&limit=12&processingSources=all`
-      + `&includeWaves=true&includeWindData=true&includeBarometerData=true&includePartitionData=true&includeTrack=true&token=${tok}`;
+      + `&includeWaves=true&includeWindData=true&includePartitionData=true&token=${tok}`;
     let r = await fetch(url(await getToken()), { cache: 'no-store' });
     if (r.status === 401 || r.status === 403) r = await fetch(url(await getToken(true)), { cache: 'no-store' });
     if (!r.ok) throw new Error(`Data request failed (${r.status})`);
@@ -310,14 +298,6 @@
     if (!r.ok) throw new Error(`History request failed (${r.status})`);
     return (await r.json()).data || {};
   }
-  async function fetchDevice() {
-    // Battery, solar and humidity only come from the latest-data endpoint.
-    try {
-      const r = await fetch(`${API}/api/latest-data?spotterId=${SPOTTER_ID}&token=${await getToken()}`, { cache: 'no-store' });
-      if (!r.ok) return null;
-      return (await r.json()).data || null;
-    } catch { return null; }
-  }
   // Prefer the newest HDR-processed record (what the Sofar dashboard shows); fall back to the newest embedded one.
   const newest = (arr, source) => {
     const list = (arr || []).filter(x => !source || x.processing_source === source);
@@ -328,12 +308,10 @@
 
   // ---------- render ----------
   let lastReport = null;
-  function render(d, dev) {
+  function render(d) {
     const w = pick(d.waves) || {};
     const wind = pick(d.wind);
-    const baro = pick(d.barometerData);
     const part = pick(d.partitionData);
-    const pos = newest(d.track) || w;
 
     lastReport = w.timestamp || null;
     $('title').textContent = `Spotter ${d.spotterId || SPOTTER_ID}`;
@@ -359,11 +337,6 @@
       $('ws').textContent = '—'; $('wsNote').textContent = 'No wind data'; setDir('wd', null);
     }
 
-    if (baro && baro.value != null) {
-      $('bp').textContent = fmt(baro.value, 1);
-      $('bpNote').textContent = `${fmt(baro.value * 0.02953, 2)} inHg`;
-    } else { $('bp').textContent = '—'; $('bpNote').textContent = 'No pressure data'; }
-
     // Partitions: lowest frequency band = swell, highest = sea.
     const parts = (part && part.partitions ? [...part.partitions] : []).sort((a, b) => a.startFrequency - b.startFrequency);
     const swell = parts[0] || null, sea = parts[parts.length - 1] || null;
@@ -376,120 +349,151 @@
     setPart(swell, 'sw');
     setPart(parts.length > 1 ? sea : null, 'se');
 
-    if (pos && pos.latitude != null && pos.longitude != null) {
-      const la = Number(pos.latitude), lo = Number(pos.longitude);
-      $('pos').textContent = `${Math.abs(la).toFixed(4)}° ${la >= 0 ? 'N' : 'S'}, ${Math.abs(lo).toFixed(4)}° ${lo >= 0 ? 'E' : 'W'}`;
-      $('pos').href = `https://www.google.com/maps?q=${la},${lo}`;
-      $('posNote').textContent = 'Open in Google Maps';
-    }
-
-    if (dev) {
-      $('batt').textContent = fmt(dev.batteryVoltage, 2);
-      const bits = [];
-      if (dev.solarVoltage != null) bits.push(`solar ${fmt(dev.solarVoltage, 2)} V`);
-      if (dev.humidity != null) bits.push(`humidity ${Math.round(dev.humidity)}%`);
-      if (dev.commSource) bits.push(`${dev.commSource} link`);
-      $('battNote').textContent = bits.join(' · ') || '—';
-    }
-
     updateAgo();
   }
   // ---------- charts ----------
   const NS = 'http://www.w3.org/2000/svg';
   const el = (name, attrs = {}) => { const e = document.createElementNS(NS, name); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
-  const charts = {};   // id -> {points, unit, decimals}
+  const txt = (attrs, content) => Object.assign(el('text', attrs), { textContent: content });
+  const charts = {};   // id -> {points, lanes, arrowKey}
 
-  function niceMax(v) {
+  function niceStep(v) {
     if (!(v > 0)) return 1;
     const p = Math.pow(10, Math.floor(Math.log10(v)));
     const f = v / p;
     const n = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
     return n * p;
   }
+  // A chart is one or more "lanes" (line + area, own y scale) stacked on a shared 24 h time axis,
+  // plus an optional strip of direction arrows above the first lane.
   function drawChart(id) {
     const c = charts[id]; if (!c) return;
     const svg = $(id), tip = $('tip' + id.slice(2));
     svg.replaceChildren();
-    const W = svg.clientWidth || 300, H = 220;
+    const W = svg.clientWidth || 300;
+    const m = { l: 34, r: 14, t: 10, b: 24 };
+    const ARROWS = c.arrowKey ? 26 : 0, LANE_GAP = 30;
+    const H = m.t + ARROWS + c.lanes.reduce((s, l) => s + l.h, 0) + LANE_GAP * (c.lanes.length - 1) + m.b;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    const m = { l: 34, r: 14, t: 16, b: 24 };
-    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    svg.style.height = H + 'px';
+    const iw = W - m.l - m.r;
     const now = Date.now(), t0 = now - 24 * 3600 * 1000;
     const pts = c.points.filter(p => p.t >= t0 && p.t <= now + 60000);
-
     if (!pts.length) {
-      svg.appendChild(Object.assign(el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'empty' }), { textContent: 'No processed reports in the last 24 hours' }));
+      svg.appendChild(txt({ x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'empty' }, 'No processed reports in the last 24 hours'));
       return;
     }
-    // Round the axis to 4 equal steps of a "nice" size so every label is a round number.
-    const steps = 4;
-    const step = niceMax(Math.max(...pts.map(p => p.v)) * 1.15 / steps);
-    const ymax = step * steps;
-    const yDec = step < 1 ? 1 : 0;
     const X = t => m.l + (t - t0) / (now - t0) * iw;
-    const Y = v => m.t + ih - (v / ymax) * ih;
 
-    // horizontal grid + y labels
-    for (let i = 0; i <= steps; i++) {
-      const v = step * i, y = Y(v);
-      svg.appendChild(el('line', { x1: m.l, x2: W - m.r, y1: y, y2: y, class: 'grid-line' }));
-      svg.appendChild(Object.assign(el('text', { x: m.l - 6, y: y + 4, 'text-anchor': 'end' }), { textContent: fmt(v, yDec) }));
+    // direction arrows: one per report, pointing where the waves/wind are heading
+    if (c.arrowKey) {
+      const cy = m.t + ARROWS / 2;
+      for (const p of pts) {
+        const d = p[c.arrowKey]; if (d == null) continue;
+        const g = el('g', { transform: `translate(${X(p.t).toFixed(1)} ${cy}) rotate(${(d + 180) % 360})`, class: 'dir-arrow' });
+        g.appendChild(el('path', { d: 'M0,-7 L4,2 L0,0.5 L-4,2 Z' }));
+        g.appendChild(el('line', { x1: 0, y1: 0.5, x2: 0, y2: 7 }));
+        svg.appendChild(g);
+      }
+      svg.appendChild(txt({ x: m.l - 6, y: cy + 4, 'text-anchor': 'end' }, 'dir'));
     }
+
+    // lanes
+    let top = m.t + ARROWS;
+    const laneY = [];
+    c.lanes.forEach((lane, li) => {
+      const vals = pts.map(p => p[lane.key]).filter(v => v != null);
+      const steps = lane.steps || 4;
+      const lo = lane.floor != null ? lane.floor : 0;
+      const step = niceStep((Math.max(...vals) - lo) * 1.15 / steps) || 1;
+      const ymax = lo + step * steps, yDec = step < 1 ? 1 : 0;
+      const Y = v => top + lane.h - (v - lo) / (ymax - lo) * lane.h;
+      laneY.push(Y);
+      if (li > 0) svg.appendChild(txt({ x: m.l, y: top - 10, class: 'lane-label' }, `${lane.label} (${lane.unit})`));
+      for (let i = 0; i <= steps; i++) {
+        const v = lo + step * i, y = Y(v);
+        svg.appendChild(el('line', { x1: m.l, x2: W - m.r, y1: y, y2: y, class: 'grid-line' }));
+        svg.appendChild(txt({ x: m.l - 6, y: y + 4, 'text-anchor': 'end' }, fmt(v, yDec)));
+      }
+      const lp = pts.filter(p => p[lane.key] != null);
+      const line = lp.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)},${Y(p[lane.key]).toFixed(1)}`).join(' ');
+      const base = Y(lo);
+      svg.appendChild(el('path', { d: `${line} L${X(lp[lp.length - 1].t).toFixed(1)},${base} L${X(lp[0].t).toFixed(1)},${base} Z`, class: 'area' }));
+      svg.appendChild(el('path', { d: line, class: 'series' }));
+      const last = lp[lp.length - 1];
+      const lx = X(last.t), ly = Y(last[lane.key]), anchor = lx > W - 64 ? 'end' : 'start';
+      svg.appendChild(el('circle', { cx: lx, cy: ly, r: 4.5, class: 'end' }));
+      svg.appendChild(txt({ x: lx + (anchor === 'end' ? -8 : 8), y: ly - 8, 'text-anchor': anchor, class: 'end-label' }, `${fmt(last[lane.key], lane.dec)} ${lane.unit}`));
+      top += lane.h + LANE_GAP;
+    });
+
     // x labels every 6 h, on the hour
     const firstTick = new Date(t0); firstTick.setMinutes(0, 0, 0); firstTick.setHours(firstTick.getHours() + 1);
     for (let t = firstTick.getTime(); t <= now; t += 3600 * 1000) {
       if (new Date(t).getHours() % 6 !== 0) continue;
-      const lbl = new Date(t).toLocaleTimeString([], { hour: 'numeric' });
-      svg.appendChild(Object.assign(el('text', { x: X(t), y: H - 6, 'text-anchor': 'middle' }), { textContent: lbl }));
+      svg.appendChild(txt({ x: X(t), y: H - 6, 'text-anchor': 'middle' }, new Date(t).toLocaleTimeString([], { hour: 'numeric' })));
     }
 
-    // area + line
-    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join(' ');
-    const base = Y(0);
-    svg.appendChild(el('path', { d: `${line} L${X(pts[pts.length - 1].t).toFixed(1)},${base} L${X(pts[0].t).toFixed(1)},${base} Z`, class: 'area' }));
-    svg.appendChild(el('path', { d: line, class: 'series' }));
-
-    // endpoint marker + direct label
-    const last = pts[pts.length - 1];
-    svg.appendChild(el('circle', { cx: X(last.t), cy: Y(last.v), r: 4.5, class: 'end' }));
-    const lx = X(last.t), anchor = lx > W - 60 ? 'end' : 'start';
-    svg.appendChild(Object.assign(el('text', { x: lx + (anchor === 'end' ? -8 : 8), y: Y(last.v) - 8, 'text-anchor': anchor, class: 'end-label' }), { textContent: fmt(last.v, c.decimals) + ' ' + c.unit }));
-
-    // hover layer: crosshair snaps to nearest point
-    const xhair = el('line', { y1: m.t, y2: m.t + ih, class: 'xhair', visibility: 'hidden' });
-    const dot = el('circle', { r: 4.5, class: 'end', visibility: 'hidden' });
-    svg.appendChild(xhair); svg.appendChild(dot);
-    const hit = el('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' });
+    // hover layer: crosshair snaps to the nearest report and the tooltip lists every value at that time
+    const plotTop = m.t + ARROWS, plotBottom = H - m.b;
+    const xhair = el('line', { y1: plotTop, y2: plotBottom, class: 'xhair', visibility: 'hidden' });
+    svg.appendChild(xhair);
+    const dots = c.lanes.map(() => { const d = el('circle', { r: 4.5, class: 'end', visibility: 'hidden' }); svg.appendChild(d); return d; });
+    const hit = el('rect', { x: m.l, y: plotTop, width: iw, height: plotBottom - plotTop, fill: 'transparent' });
     svg.appendChild(hit);
     const show = clientX => {
       const rect = svg.getBoundingClientRect();
       const px = (clientX - rect.left) * (W / rect.width);
       let best = pts[0], bd = Infinity;
       for (const p of pts) { const d = Math.abs(X(p.t) - px); if (d < bd) { bd = d; best = p; } }
-      const x = X(best.t), y = Y(best.v);
+      const x = X(best.t);
       xhair.setAttribute('x1', x); xhair.setAttribute('x2', x); xhair.setAttribute('visibility', 'visible');
-      dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('visibility', 'visible');
       tip.replaceChildren();
-      const b = document.createElement('b'); b.textContent = `${fmt(best.v, c.decimals)} ${c.unit}`;
-      const t = document.createElement('div'); t.className = 't';
-      t.textContent = new Date(best.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + (best.extra ? ` · ${best.extra}` : '');
-      tip.append(b, t);
+      const when = document.createElement('div'); when.className = 't';
+      when.textContent = new Date(best.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+      tip.appendChild(when);
+      c.lanes.forEach((lane, i) => {
+        const v = best[lane.key];
+        if (v == null) { dots[i].setAttribute('visibility', 'hidden'); return; }
+        dots[i].setAttribute('cx', x); dots[i].setAttribute('cy', laneY[i](v)); dots[i].setAttribute('visibility', 'visible');
+        const row = document.createElement('div');
+        const b = document.createElement('b'); b.textContent = `${fmt(v, lane.dec)} ${lane.unit}`;
+        row.append(`${lane.label}: `, b);
+        tip.appendChild(row);
+      });
+      if (c.arrowKey && best[c.arrowKey] != null) {
+        const row = document.createElement('div');
+        const b = document.createElement('b'); b.textContent = `${Math.round(best[c.arrowKey]) % 360}° (${compass(best[c.arrowKey])})`;
+        row.append('From: ', b);
+        tip.appendChild(row);
+      }
       tip.style.display = 'block';
-      const sx = x * (rect.width / W), flip = sx > rect.width * 0.65;
+      const sx = x * (rect.width / W), flip = sx > rect.width * 0.6;
       tip.style.left = flip ? '' : `${sx + 12}px`;
       tip.style.right = flip ? `${rect.width - sx + 12}px` : '';
-      tip.style.top = `${Math.max(0, y * (rect.height / H) - 40)}px`;
+      tip.style.top = `${plotTop + 4}px`;
     };
-    const hide = () => { xhair.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.style.display = 'none'; };
+    const hide = () => { xhair.setAttribute('visibility', 'hidden'); dots.forEach(d => d.setAttribute('visibility', 'hidden')); tip.style.display = 'none'; };
     hit.addEventListener('pointermove', e => show(e.clientX));
     hit.addEventListener('pointerdown', e => show(e.clientX));
     hit.addEventListener('pointerleave', hide);
   }
-  function setChart(id, points, unit, decimals) { charts[id] = { points, unit, decimals }; drawChart(id); }
   function renderCharts(h) {
     const byTime = a => a.map(p => ({ t: new Date(p.timestamp).getTime(), ...p })).sort((a, b) => a.t - b.t);
-    setChart('chHs', byTime(h.waves || []).map(p => ({ t: p.t, v: p.significantWaveHeight * M_TO_FT, extra: `Tp ${fmt(p.peakPeriod, 0)} s` })), 'ft', 1);
-    setChart('chWs', byTime(h.wind || []).map(p => ({ t: p.t, v: p.speed * MS_TO_MPH, extra: `from ${compass(p.direction)} ${Math.round(p.direction)}°` })), 'mph', 1);
+    charts.chHs = {
+      points: byTime(h.waves || []).map(p => ({ t: p.t, hs: p.significantWaveHeight * M_TO_FT, tp: p.peakPeriod, dir: p.peakDirection })),
+      lanes: [
+        { key: 'hs', label: 'Height', unit: 'ft', dec: 1, h: 150 },
+        { key: 'tp', label: 'Peak period', unit: 's', dec: 1, h: 70, steps: 2 },
+      ],
+      arrowKey: 'dir',
+    };
+    charts.chWs = {
+      points: byTime(h.wind || []).map(p => ({ t: p.t, ws: p.speed * MS_TO_MPH, dir: p.direction })),
+      lanes: [{ key: 'ws', label: 'Wind speed', unit: 'mph', dec: 1, h: 150 }],
+      arrowKey: 'dir',
+    };
+    Object.keys(charts).forEach(drawChart);
   }
   let resizeTimer;
   window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => Object.keys(charts).forEach(drawChart), 150); });
@@ -509,8 +513,8 @@
     const btn = $('refresh');
     btn.disabled = true; btn.textContent = 'Refreshing…';
     try {
-      const [hist, dev, last24] = await Promise.all([fetchHistory(), fetchDevice(), fetchLast24h().catch(() => null)]);
-      render(hist, dev);
+      const [hist, last24] = await Promise.all([fetchHistory(), fetchLast24h().catch(() => null)]);
+      render(hist);
       if (last24) renderCharts(last24);
       $('error').classList.remove('show');
     } catch (e) {
