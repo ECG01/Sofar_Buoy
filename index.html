@@ -74,7 +74,7 @@
   .hero .value { font-size: 56px; font-weight: 600; line-height: 1; letter-spacing: -0.5px; }
   .hero .value small { font-size: 22px; font-weight: 500; color: var(--ink-2); margin-left: 6px; }
   .hero .meta { font-size: 13px; color: var(--ink-3); margin-top: 6px; }
-  .hero .side { display: flex; gap: 28px; }
+  .hero .side { display: flex; flex-wrap: wrap; gap: 12px 28px; }
   .hero .side .k { font-size: 12px; color: var(--ink-3); }
   .hero .side .v { font-size: 20px; font-weight: 600; }
   .hero .side .v small { font-size: 12px; font-weight: 500; color: var(--ink-2); }
@@ -159,8 +159,9 @@
       <div class="meta" id="hsMeta">Waiting for data</div>
     </div>
     <div class="side">
-      <div><div class="k">Peak period</div><div class="v"><span id="tp">—</span> <small>s</small></div></div>
-      <div><div class="k">Mean period</div><div class="v"><span id="tm">—</span> <small>s</small></div></div>
+      <div><div class="k">Bulk peak period</div><div class="v"><span id="tp">—</span> <small>s</small></div></div>
+      <div><div class="k">Bulk mean period</div><div class="v"><span id="tm">—</span> <small>s</small></div></div>
+      <div><div class="k">Swell mean period</div><div class="v"><span id="swTmHero">—</span> <small>s</small></div></div>
     </div>
   </section>
 
@@ -349,6 +350,7 @@
     };
     $('partTime').textContent = part ? `· processed report of ${local(part.timestamp)}` : '';
     setPart(swell, 'sw');
+    $('swTmHero').textContent = swell ? fmt(swell.meanPeriod, 1) : '—';
     setPart(parts.length > 1 ? sea : null, 'se');
 
     updateAgo();
